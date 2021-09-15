@@ -1,0 +1,12 @@
+//------------------------------------------------
+//--- 010 Editor v9.0.2 Script File
+//
+//      File: copyBytes.1sc
+//   Authors: alphaZomega
+//   Version: 0.1
+//   Purpose: Copies unformatted bytes to the clipboard
+//  Category: 
+//   History: Mar 27 2021
+//------------------------------------------------
+CopyToClipboard();
+Printf("Copied %u bytes to the clipboard\n", GetSelSize());

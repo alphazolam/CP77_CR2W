@@ -1,0 +1,76 @@
+//------------------------------------------------
+//--- 010 Editor v9.0.2 Script File
+//
+//      File: CP77_CR2W_insertMatBuffer.1sc
+//   Authors: alphaZomega
+//   Version: 0.1
+//   Purpose: Sets CMaterialInstance size in rawDataHeaders and corrects offsets for materials after the one inserted
+//  Category: CP77_CR2W
+//   History: 
+//------------------------------------------------
+
+//global vars
+uint64 a, f, c, d, i, doExit;
+uint CR2WIdx = 0;
+
+//functions
+void fixProp(PROPERTY& prop) {
+    if (matIdx > prop.count)
+        Printf("Material index out of range\n");
+
+    local uint oldSize;
+    for (d=matIdx; d<prop.count; d++){
+        if (exists(prop.More[d].More[1])) {
+            if (d == matIdx) {
+                oldSize = prop.More[d].More[1].Value;
+                prop.More[d].More[1].Value = newSize;
+            } else {
+                if (exists(prop.More[d-1].More[1]))
+                    prop.More[d].More[0].Value = prop.More[d-1].More[0].Value + prop.More[d-1].More[1].Value; 
+                else 
+                    prop.More[d].More[0].Value = prop.More[d-1].More[0].Value; 
+            }
+        } else if (d == matIdx) {
+            oldSize = prop.More[d].More[0].Value;
+            prop.More[d].More[0].Value = newSize;
+        }
+    }
+}
+
+int findProp(PROPERTY& prop, string name) {
+    if (exists(prop.Type) && prop.Type.type == name) {
+        fixProp(prop);
+        return 1;
+    } else {
+        local int p = 0;
+        while (exists(prop.More[p])) {
+            if (findProp(prop.More[p], name) == 1)
+                return 1;
+            p++;
+        }
+    }
+    return 0;
+}
+
+//start of script
+if (level > 0)
+    CR2WIdx = InputNumber("Select CR2W level", "Choose a CR2W[] number: ", s);
+
+if (CR2WIdx > level) 
+    return "No such CR2WFile";
+
+uint64 matIdx = InputNumber("Insert Local Material Header", "What number is your Material?", "0");
+uint64 newSize = InputNumber("Insert Local Material Header", "What size is your CMaterialInstance?", "0");
+
+for (a=0; a<CR2WFile[CR2WIdx].CR2WTable[4].itemCount; a++){
+    if (doExit)
+        break;
+    f = 0;
+    while (exists(CR2WFile[CR2WIdx].DATA.Class[a].Property[f])) {
+        if (findProp(CR2WFile[CR2WIdx].DATA.Class[a].Property[f], "array:meshLocalMaterialHeader") == 1) { 
+            doExit = true;
+            break;
+        }
+        f++;
+    }
+}

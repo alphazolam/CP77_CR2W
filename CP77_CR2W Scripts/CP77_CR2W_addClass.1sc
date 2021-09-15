@@ -1,0 +1,214 @@
+//------------------------------------------------
+//--- 010 Editor v9.0.2 Script File
+//
+//      File: CP77_CR2W_AddClass
+//   Authors: alphaZomega
+//   Version: 0.1
+//   Purpose: Copying a class and all its requirements from one CR2WFile to another
+//  Category: CP77_CR2W
+//   History: 
+//------------------------------------------------
+ushort fix (ushort idx, string inString) {
+    for (j=0; j<CR2WFile[0].CR2WTable[1].itemCount; j++) {
+        if (CR2WFile[0].NAMES.Name[j].hName == inString) {
+            //SPrintf(s, "%u = %s\n", j, CR2WFile[0].NAMES.Name[j].hName); output += s;
+            return j;
+        }
+    }
+    return idx + oldCNamesCount - sub;
+}
+
+void fixIndex(PROPERTY& prop) {
+    c = 0;
+    if (exists(prop.Index.Index)) {
+        if (exists(prop.Index[1])) {
+            for (x=0; x < prop.count; x++) {
+                prop.Index[x].Index = fix(prop.Index[x].Index, prop.Index[x].String);
+            }
+        } else  prop.Index.Index = fix(prop.Index.Index, prop.Index.String);
+    }   
+
+    if (exists(prop.Path.Index))
+        prop.Path.Index += CR2WFile[0].CR2WTable[2].itemCount;
+
+    if (exists(prop.Type.strIdx)) {
+        if (exists(prop.Type[1].strIdx)) {
+            for (x=0; x < 4; x++) {
+                prop.Type[x].strIdx.Index = fix(prop.Type[x].strIdx.Index, prop.Type[x].strIdx.String);
+                prop.Type[x].dataType.Index = fix(prop.Type[x].dataType.Index, prop.Type[x].dataType.String);
+            }
+        } else {
+            prop.Type.strIdx.Index = fix(prop.Type.strIdx.Index, prop.Type.strIdx.String);
+            prop.Type.dataType.Index = fix(prop.Type.dataType.Index, prop.Type.dataType.String);
+        }
+    }
+
+    local int c = 0;
+    while (exists(prop.More[c])) {
+        fixIndex(prop.More[c]);
+        c++;
+    }
+}
+
+ //user input:
+string s; SPrintf(s, "%u", level);
+uint CR2WIdx = 0;
+if (level > 0)
+    CR2WIdx = InputNumber("Copy From CR2W", "Choose a CR2W[] number to copy from: ", s);
+
+if (CR2WIdx > level) 
+    return "No such CR2WFile";
+
+uint ExportIdx = InputNumber("Clone Export", "Choose an export to copy: ", "0");
+
+if (ExportIdx > CR2WFile[CR2WIdx].CR2WTable[4].itemCount-1) 
+    return "No such class";
+
+uint64 oldExportsStart = CR2WFile[CR2WIdx].CR2WExport.CR2WExport[ExportIdx].dataOffset;
+string output = "";
+
+//declare byte arrays, sizes and counts:
+uint64 diff = 0, sub = 0, i = 0, j, c, p, x, y, z;
+uint64 importsaveOffset = 0;
+uint64 oldCNamesCount = CR2WFile[0].CR2WTable[1].itemCount;
+uint64 exportSize = CR2WFile[CR2WIdx].CR2WExport.CR2WExport[ExportIdx].dataSize;
+uint64 oldPathCount = CR2WFile[0].CR2WTable[2].itemCount;
+uint64 pathCount = CR2WFile[CR2WIdx].CR2WTable[2].itemCount;
+uint64 stringsSize = CR2WFile[CR2WIdx].CR2WTable[0].itemCount - sub;
+uint64 cNamesCount = CR2WFile[CR2WIdx].CR2WTable[1].itemCount - sub - 1;
+uint64 CR2WSize = sizeof(CR2WFile[CR2WIdx]);
+uint64 importSize = pathCount * 8;
+uint64 cNamesSize = cNamesCount * 8;
+char CR2Wbytes[CR2WSize];
+char importBytes[importSize];
+char stringBytes[stringsSize];
+char cNamesBytes[cNamesSize];
+char exportBytes[24];
+char exportDataBytes[exportSize];
+
+
+if (CR2WIdx > 0) {
+    sub = 1;
+    //read original CR2WFile for restoring later:
+    ReadBytes(CR2Wbytes, startof(CR2WFile[CR2WIdx]), CR2WSize);
+
+    //shift all string indexes in the source CR2W + the strings of the original, then copy it all as a buffer, then change it back:
+    while (exists(CR2WFile[CR2WIdx].DATA.Class[ExportIdx].Property[i])) {
+        fixIndex(CR2WFile[CR2WIdx].DATA.Class[ExportIdx].Property[i]);
+        i++;
+    } 
+} else oldCNamesCount = 0; //makes it so export offset is not added to
+
+//copy bytes:
+ReadBytes(stringBytes, sub + CR2WFile[CR2WIdx].CR2WTable[0].offset+startof(CR2WFile[CR2WIdx]), stringsSize); //skip null byte
+if (exists(importBytes))
+    ReadBytes(importBytes, CR2WFile[CR2WIdx].CR2WTable[2].offset+startof(CR2WFile[CR2WIdx]), importSize);
+ReadBytes(cNamesBytes, CR2WFile[CR2WIdx].CR2WTable[1].offset+startof(CR2WFile[CR2WIdx]) + 8, cNamesSize);
+ReadBytes(exportBytes, startof(CR2WFile[CR2WIdx].CR2WExport.CR2WExport[ExportIdx]), 24);
+
+//sometimes the filesize is smaller than expected:
+if ( startof(CR2WFile[CR2WIdx]) + CR2WFile[CR2WIdx].CR2WExport.CR2WExport[ExportIdx].dataOffset + exportSize > FileSize()) {
+    SPrintf(s, "Copied bytes would be %u bytes bigger than filesize\n", (startof(CR2WFile[CR2WIdx]) + CR2WFile[CR2WIdx].CR2WExport.CR2WExport[ExportIdx].dataOffset + exportSize) - FileSize()); output += s;
+    InsertBytes(FileSize(), startof(CR2WFile[CR2WIdx]) + CR2WFile[CR2WIdx].CR2WExport.CR2WExport[ExportIdx].dataOffset + exportSize - FileSize(), 0);
+}  
+ReadBytes(exportDataBytes, startof(CR2WFile[CR2WIdx]) + CR2WFile[CR2WIdx].CR2WExport.CR2WExport[ExportIdx].dataOffset, exportSize);
+
+//restore original CR2WFile bytes, since the edited bytes are now copied:
+if (CR2WIdx > 0) 
+    WriteBytes(CR2Wbytes, startof(CR2WFile[CR2WIdx]), CR2WSize);
+
+//calcluate difference:
+if (CR2WIdx > 0)
+    diff = stringsSize + cNamesSize + 24 + exportSize + importSize;
+else 
+    diff = 24 + exportSize;
+
+//find point of data insertion:
+uint64 insertionPoint = CR2WFile[0].CR2WExport.CR2WExport[CR2WFile[0].CR2WTable[4].itemCount-1].dataOffset + 
+                        CR2WFile[0].CR2WExport.CR2WExport[CR2WFile[0].CR2WTable[4].itemCount-1].dataSize ;
+
+//correct exports offsets:
+for (i=0; i<CR2WFile[0].CR2WTable[4].itemCount; i++) {
+    CR2WFile[0].CR2WExport.CR2WExport[i].dataOffset += diff - exportSize;
+}
+//correct buffer offsets:
+for (i=0; i<CR2WFile[0].CR2WTable[5].itemCount; i++) {
+    CR2WFile[0].CR2WBuffer[i].offset += diff;
+}
+
+//Insert new class data:
+InsertBytes(insertionPoint, exportSize, 0);
+WriteBytes(exportDataBytes, insertionPoint, exportSize);
+
+//Insert new CR2WExport table:
+InsertBytes(startof(CR2WFile[0].CR2WExport.CR2WExport[CR2WFile[0].CR2WTable[4].itemCount - 1]) + 24, 24, 0);
+WriteBytes(exportBytes, startof(CR2WFile[0].CR2WExport.CR2WExport[CR2WFile[0].CR2WTable[4].itemCount - 1]) + 24, 24);
+
+//Correct offset of copied CR2WExport:
+FSeek(24 + startof(CR2WFile[0].CR2WExport.CR2WExport[CR2WFile[0].CR2WTable[4].itemCount-1]));
+WriteUShort(FTell(), ReadUShort(FTell()) + oldCNamesCount - sub);
+WriteUInt(FTell()+12, insertionPoint + diff - exportSize);
+
+if (CR2WIdx > 0) {
+    //Insert new CR2WImport tables:
+    if (exists(CR2WFile[CR2WIdx].CR2WImport)) {
+        
+        if (CR2WFile[0].CR2WTable[2].itemCount > 0) {
+            FSeek(startof(CR2WFile[0].CR2WImport.CR2WImport[CR2WFile[0].CR2WTable[2].itemCount-1]) + 8);
+        } else {
+            FSeek(CR2WFile[0].CR2WTable[1].offset + ((CR2WFile[0].CR2WTable[1].itemCount+1) * 8));
+        } 
+        importsaveOffset = FTell();
+        //SPrintf(s, "FTell %u\n", FTell() );  output += s;
+        InsertBytes(FTell(), importSize, 0);
+        WriteBytes(importBytes, FTell(), importSize);
+        
+        //Correct offsets of copied CR2WImports:
+        for (j=0; j < pathCount; j++) {
+            WriteUInt(FTell(), ReadUInt(FTell()) + CR2WFile[0].CR2WTable[0].itemCount - sub);
+            //SPrintf(s, "Changing %u to %u at %u\n", ReadUInt(FTell()), ReadUInt(FTell()) + CR2WFile[0].CR2WTable[0].itemCount, FTell() ); output += s;
+            FSkip(8);
+        }
+    } 
+
+    //Insert new cNames
+    InsertBytes(CR2WFile[0].CR2WTable[1].offset + CR2WFile[0].CR2WTable[1].itemCount*8, cNamesSize, 0);
+    WriteBytes(cNamesBytes, CR2WFile[0].CR2WTable[1].offset + CR2WFile[0].CR2WTable[1].itemCount*8, cNamesSize);
+    uint64 importsStart = FTell();
+
+    //Correct offsets of copied cNames:
+    FSeek(CR2WFile[0].CR2WTable[1].offset + (CR2WFile[0].CR2WTable[1].itemCount) * 8);
+    for (j=0; j < cNamesCount; j++) {
+        WriteUInt(FTell(), ReadUInt(FTell()) + CR2WFile[0].CR2WTable[0].itemCount - sub);
+        FSkip(8);
+    }
+    
+    //Insert new strings:
+    InsertBytes(CR2WFile[0].CR2WTable[0].offset + CR2WFile[0].CR2WTable[0].itemCount, stringsSize, 0);
+    WriteBytes(stringBytes, CR2WFile[0].CR2WTable[0].offset + CR2WFile[0].CR2WTable[0].itemCount, stringsSize);
+}
+
+//correct CR2WTables:
+if (CR2WFile[0].CR2WTable[5].offset != 0)
+    CR2WFile[0].CR2WTable[5].offset += diff - exportSize;
+CR2WFile[0].CR2WTable[4].offset += diff - exportSize - 24;
+CR2WFile[0].CR2WTable[4].itemCount += 1;
+if (CR2WIdx > 0) {
+    CR2WFile[0].CR2WTable[3].offset += stringsSize + cNamesSize + importSize;
+    if (CR2WFile[0].CR2WTable[2].offset > 0) {
+        CR2WFile[0].CR2WTable[2].offset += stringsSize + cNamesSize;
+    } else if (pathCount > 0) {
+        CR2WFile[0].CR2WTable[2].offset = importsaveOffset + stringsSize + cNamesSize;
+    }
+    CR2WFile[0].CR2WTable[2].itemCount += pathCount;
+    CR2WFile[0].CR2WTable[1].itemCount += cNamesCount;
+    CR2WFile[0].CR2WTable[1].offset += stringsSize;
+    CR2WFile[0].CR2WTable[0].itemCount += stringsSize;
+    WriteBytes(CR2Wbytes, startof(CR2WFile[CR2WIdx])+diff, CR2WSize);
+}
+RunTemplate("", true);
+
+CR2WFile[0].HEADER.fileSize += diff;
+CR2WFile[0].HEADER.bufferSize += diff;
+
+Printf("%s\n", output);

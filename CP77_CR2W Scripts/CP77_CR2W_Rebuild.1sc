@@ -1,0 +1,79 @@
+//------------------------------------------------
+//--- 010 Editor v9.0.2 Script File
+//
+//      File: CP77_CR2W_Rebuild.1sc
+//   Authors: alphaZomega
+//   Version: 0.1
+//   Purpose: Compresses + appends buffer data into a CR2W file
+//  Category: CP77_CR2W
+//   History: September 15 2021
+//------------------------------------------------
+#link "oo2ext_7_win64.dll"
+int OodleLZ_Compress(int64 format, byte buffer[], int64 bufferSize, byte outputBuffer[], int64 level, int64 unused1, int64 unused2, int64 unused3, int64 unused4, int64 unused5);
+int OodleLZ_GetCompressedBufferSizeNeeded(int64 bufferSize);
+#endlink
+
+local string s, currentBuffer;
+local string filename = GetFileName();
+local string path = FileNameGetPath(filename, true);
+local int64 indx, cnt, pos, fSize, compressedBuffSize, diff;
+local int a, b, c;
+local TFileList files = FindFiles( path, "*");
+
+void compressBuffer() {
+    //Read the Data:
+    if (FileExists(s)) {
+        Printf("Compressing buffer file %s\n", s);
+        pos = FileSize();
+        InsertFile(s, pos);
+        fSize = FileSize() - pos;
+        byte buffer[fSize];
+        ReadBytes(buffer, pos, fSize);
+        DeleteBytes(pos, fSize);
+        pos = CR2WFile[0].CR2WBuffer[cnt].offset;
+    } else if (CR2WFile[0].CR2WBuffer[cnt].diskSize > 256 && (CR2WFile[0].CR2WBuffer[cnt].memSize == CR2WFile[0].CR2WBuffer[cnt].diskSize)) {
+        Printf("Compressing embedded buffer %i\n", cnt);
+        pos = CR2WFile[0].CR2WBuffer[cnt].offset;
+        fSize = CR2WFile[0].CR2WBuffer[cnt].diskSize;
+        byte buffer[fSize];
+        ReadBytes(buffer, pos, fSize);
+    } else {
+        if (CR2WFile[0].CR2WBuffer[cnt].diskSize <= 256)
+            Printf("Skipping embedded buffer %i for being smaller than 256 bytes\n", cnt);
+        else 
+            Printf("Skipping already-compressed embedded buffer %i\n", cnt);
+        return;
+    }
+    
+    //Compress the Data:
+    compressedBuffSize = OodleLZ_GetCompressedBufferSizeNeeded(fSize);
+    byte compressedBuffer[compressedBuffSize];
+    uint sz = OodleLZ_Compress((int64)8, buffer, fSize, compressedBuffer, (int64)4, (int64)0, (int64)0, (int64)0, (int64)0, (int64)0);
+    diff = (sz + 8) - CR2WFile[0].CR2WBuffer[cnt].diskSize;
+
+
+    //Delete old data:
+    DeleteBytes(pos, CR2WFile[0].CR2WBuffer[cnt].diskSize);
+
+    //Write the new Data:
+    InsertBytes(pos, sz+8, 0);
+    WriteUInt(pos, 1263681867); //KARK
+    WriteUInt(pos+4, fSize); //buffer size
+    WriteBytes(compressedBuffer, pos+8, sz);
+    
+    //Fix the CR2WBuffers:
+    CR2WFile[0].CR2WBuffer[cnt].diskSize = sz+8;
+    CR2WFile[0].CR2WBuffer[cnt].memSize = fSize;
+    for (a=cnt+1; a<CR2WFile[0].CR2WTable[5].itemCount; a++) {
+        CR2WFile[0].CR2WBuffer[a].offset += diff;
+    }
+}
+
+//start of script:
+for (cnt = 0; cnt < CR2WFile[0].CR2WTable[5].itemCount; cnt++) {
+    SPrintf(s, "%s.%u.buffer", GetFileName(), cnt);
+    compressBuffer();
+}
+
+RunTemplate("", false);
+WriteUInt(0, 1462915651); //allows Undo

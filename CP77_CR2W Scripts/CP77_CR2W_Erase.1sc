@@ -1,0 +1,120 @@
+//------------------------------------------------
+//--- 010 Editor v9.0.2 Script File
+//
+//      File: CP77_CR2W_EraseProp.1sc
+//   Authors: alphaZomega
+//   Version: 0.1
+//   Purpose: Erase properties, classes and variables from CR2Wfiles
+//  Category: CP77_CR2W
+//   History: Mar 27 2021
+//------------------------------------------------
+//Option:                                                           Effect:
+local uint Run_Template_After_Completion = TRUE;                    //Run the template after completing the script
+
+//global vars:
+string s, output; 
+uint i, f, a;
+uint cpos = GetCursorPos();
+uint subtractedSize = 0;
+if (GetSelSize() > 0)
+    cpos = GetSelStart();
+
+//functions:
+void fixProp(PROPERTY& prop) {
+    if (exists(prop.Type.size) && prop.Type.size > 4)
+        prop.Type.size += subtractedSize;
+    if (exists(parentof(prop))) 
+        fixProp(parentof(prop));
+}
+
+int findProp(PROPERTY& prop) {
+    uint k = 0;
+    while (exists(prop.More[k])) {
+        if (startof(CR2WFile[CR2WIdx]) + startof(prop.More[k]) < cpos && startof(CR2WFile[CR2WIdx]) + startof(prop.More[k]) + sizeof(prop.More[k]) > cpos) {
+            if (findProp(prop.More[k]) == 1) {
+                return 1;
+            }
+        }
+        k++;
+    }
+    if (startof(CR2WFile[CR2WIdx]) + startof(prop) < cpos && startof(CR2WFile[CR2WIdx]) + startof(prop) + sizeof(prop) > cpos) {
+        if (exists(prop.Count))
+            prop.Count -= 1;
+        fixProp(prop);
+        return 1;
+    }
+    return 0;
+}
+
+/*uint input = MessageBox( idYes | idNo | idCancel, "CP77_CR2W","Click 'Yes' to paste, 'No' to copy");
+if (input == idCancel)
+    return 0;*/
+    
+//start of script:
+uint CR2WIdx = 0; 
+for (i=0; i<level+1; i++)
+    if (startof(CR2WFile[i]) < cpos && startof(CR2WFile[i]) + sizeof(CR2WFile[i]) > cpos) {
+        CR2WIdx = i;
+        break;
+    }
+
+int ExportIdx = -1, classStartOffs, classSize; 
+for (i=0; i<CR2WFile[CR2WIdx].CR2WTable[4].itemCount; i++) {
+    classStartOffs = startof(CR2WFile[CR2WIdx]) + CR2WFile[CR2WIdx].CR2WExport.CR2WExport[i].dataOffset;
+    classSize = CR2WFile[CR2WIdx].CR2WExport.CR2WExport[i].dataSize;
+    if (classStartOffs + classSize > cpos) { //&& classSize > 3
+        ExportIdx = i;
+        break;
+    }
+}
+
+//SPrintf(output, "%u, %i, %u\n", CR2WIdx, ExportIdx, cpos); output += s;
+if (ExportIdx == -1 || cpos < startof(CR2WFile[CR2WIdx].DATA) || ( exists(CR2WFile[CR2WIdx].BUFFERS) && cpos > startof(CR2WFile[CR2WIdx].BUFFERS))) {
+    Printf("Select inside a valid class or property\n");
+    Printf(output);
+    return false;
+}
+
+subtractedSize = -GetSelSize();
+DeleteBytes(cpos, GetSelSize());
+SPrintf(s, "Removed %u bytes from Class[%i] of CR2WFile[%u] at position %u\n", -subtractedSize, ExportIdx, CR2WIdx, cpos); output += s;
+
+CR2WFile[CR2WIdx].CR2WExport.CR2WExport[ExportIdx].dataSize += subtractedSize;
+if (CR2WFile[CR2WIdx].CR2WExport.CR2WExport[ExportIdx].dataSize < 3) {
+    uint difference = 3 - CR2WFile[CR2WIdx].CR2WExport.CR2WExport[ExportIdx].dataSize;
+    CR2WFile[CR2WIdx].CR2WExport.CR2WExport[ExportIdx].dataSize += difference; 
+    subtractedSize += difference;
+    InsertBytes(cpos, difference, 0);
+    SPrintf(s, "Inserted %u bytes padding\n", difference); output += s;
+}
+
+for (a=0; a<CR2WFile[CR2WIdx].CR2WTable[4].itemCount; a++){
+    f = 0;
+    while (exists(CR2WFile[CR2WIdx].DATA.Class[a].Property[f])) {
+        if (findProp(CR2WFile[CR2WIdx].DATA.Class[a].Property[f]) == 1) 
+            break;
+        f++;
+    }
+}
+
+//fix exports:
+uint firstOffset = CR2WFile[CR2WIdx].CR2WExport.CR2WExport[0].dataOffset;
+for (i=ExportIdx+1; i<CR2WFile[CR2WIdx].CR2WTable[4].itemCount; i++) {
+    CR2WFile[CR2WIdx].CR2WExport.CR2WExport[i].dataOffset += subtractedSize;
+    if (CR2WFile[CR2WIdx].CR2WExport.CR2WExport[i].dataOffset < firstOffset)
+        CR2WFile[CR2WIdx].CR2WExport.CR2WExport[i].dataOffset = firstOffset;
+}
+
+//fix buffers:
+for (i=0; i<CR2WFile[CR2WIdx].CR2WTable[5].itemCount; i++) 
+    CR2WFile[CR2WIdx].CR2WBuffer[i].offset += subtractedSize;
+
+
+//fix header:
+CR2WFile[CR2WIdx].HEADER.fileSize += subtractedSize;
+CR2WFile[CR2WIdx].HEADER.bufferSize += subtractedSize;
+
+if (Run_Template_After_Completion)
+    RunTemplate("", true);
+WriteByte(7,0);
+Printf(output);
