@@ -3,7 +3,7 @@
 //
 //      File: CP77_CR2W.bt
 //   Authors: alphaZomega
-//   Version: 0.5
+//   Version: 0.51
 //   Purpose: For parsing CyberPunk 2077 files
 //  Category: CP77_CR2W
 // File Mask: *
@@ -27,9 +27,12 @@ local int hideHandles <hidden=true>     = TRUE;                  // Hides "Handl
 local int parseBuffer <hidden=true>     = -1;                    // Set this to the buffer number of the mesh .buffer you want to parse. Set it to -2 to auto-detect, or -1 to disable                                                                 
                                                                  // To parse a .mesh.buffer, use the parseBuffer option and copy+paste everything in the .buffer file over the BUFFER[] struct that represents it
 
-//Path:
+//Extracted Archives Path:
 local string extractedDir <hidden=true>	=	"D:\\Games\\Cyberpunk 2077\\archive\\pc\\content\\";
 
+
+//Location of Noesis.exe:
+local string NoesisPath <hidden=true> = "C:\\Program Files (x86)\\Noesis\\Noesis.exe";
 
 
 //global variables:
@@ -286,11 +289,11 @@ typedef struct
     else local string Path <open=suppress, hidden=true> = "";
 	local uint i <hidden=true>;	
 	if (FileExists(localDir + Path)) {
-		local string Full_Path = localDir + Path;
+		local string Full_Path <hidden=true> = localDir + Path;
 	} else {
 		for( i = 0; i < fl.dircount; i++ ) {
 			if (FileExists(extractedDir + fl.dir[i].dirname + "\\" + Path)) {
-				local string Full_Path = extractedDir + fl.dir[i].dirname + "\\" + Path;
+				local string Full_Path <hidden=true> = extractedDir + fl.dir[i].dirname + "\\" + Path;
 				break;
 			}
 		}
@@ -312,22 +315,31 @@ typedef struct
 		 return CR2WFile[level].NAMES.Name[mats[input.i]].name;
 	}
     void WritePATHINDEX (PATHINDEX &input, string s ) { 
-		if (sizeof(s) == 2 && Atoi(s) == 0 && exists(input.Full_Path)) {
-			FileOpen(input.Full_Path, TRUE, "hex", 0); 
-			return;
-		}
-        local uint idx = (ushort)(Atof(s));
-        if (idx != 0 && exists(CR2WFile[input.lvl].CR2WImport.CR2WImport[idx-1].path)) {
-			input.Index = idx;
+		if (s == " " && exists(input.Full_Path) ) {
+            if (FileExists(NoesisPath) && (doesExist(input.Full_Path, ".mesh$")  || doesExist(input.Full_Path, ".morphtarget$") 
+            || doesExist(input.Full_Path, ".xbm$") || doesExist(input.Full_Path, ".mi$") )) {
+                local int fileIdx = GetFileNum();
+                FileSelect(FileOpen(input.Full_Path, TRUE, "hex", 1));
+                Printf("%i\n", FindFirst("textureData"));
+                if ((!doesExist(input.Full_Path, ".xbm$") && !doesExist(input.Full_Path, ".mi$")) || FindFirst("textureData") > -1) //only open textures in Noesis if they have textureData
+                    Exec(NoesisPath, "\"" + input.Full_Path + "\"", 0);
+                FileSelect(fileIdx);
+            } else 
+			    FileOpen(input.Full_Path, TRUE, "hex", 1); 
 		} else {
-			for (z=0; z<CR2WFile[input.lvl].CR2WImport.ImportCount; z++) {
-				if (s == CR2WFile[input.lvl].CR2WImport.CR2WImport[z].path) {
-					input.Index = z+1;
-					break;
-				}
-			} 
-		} if (exists(CR2WFile[input.lvl].CR2WImport.CR2WImport[input.Index-1].path))
-            input.Path = CR2WFile[input.lvl].CR2WImport.CR2WImport[input.Index-1].path; //CR2WFile[input.lvl].NAMES.Name[input.Index].name;
+            local uint idx = (ushort)(Atof(s));
+            if (idx != 0 && exists(CR2WFile[input.lvl].CR2WImport.CR2WImport[idx-1].path)) {
+			    input.Index = idx;
+		    } else {
+			    for (z=0; z<CR2WFile[input.lvl].CR2WImport.ImportCount; z++) {
+				    if (s == CR2WFile[input.lvl].CR2WImport.CR2WImport[z].path) {
+					    input.Index = z+1;
+					    break;
+				    }
+			    } 
+		    } if (exists(CR2WFile[input.lvl].CR2WImport.CR2WImport[input.Index-1].path))
+                input.Path = CR2WFile[input.lvl].CR2WImport.CR2WImport[input.Index-1].path; //CR2WFile[input.lvl].NAMES.Name[input.Index].name;
+        }
     }
 	
 typedef ubyte BYTETODEC <read=ReadBYTETODEC, write=WriteBYTETODEC>;
@@ -505,7 +517,7 @@ typedef struct {
         skipPadding();
         maxSize = FTell() - startof(String);
         FSeek(startof(String)+ actualLen);
-    } else 
+    } else if (Type.size != 5)
         Printf("Invalid length for string at %u\n", FTell());
 } STRING <read=ReadSTRING, write=WriteSTRING, optimize=false, open=suppress>;
 
@@ -720,10 +732,10 @@ typedef struct {
                 theColor = (byteB<<16) | (byteG<<8) | (byteR); SetBackColor(theColor);
                 struct { 
                     float Time; SetForeColor(byteR);
-                    float Red; SetForeColor((uint64)(byteG)<<8);
-                    float Green; SetForeColor((uint64)(byteB)<<16);
-                    float Blue; SetForeColor((uint64)(byteA)<<16 | (uint64)(byteA)<<8 | (uint64)(byteA)); 
-                    float Alpha; SetForeColor(cNone); SetBackColor(cNone);
+                    float Red <name="Red">; SetForeColor((uint64)(byteG)<<8);
+                    float Green <name="Green">; SetForeColor((uint64)(byteB)<<16);
+                    float Blue <name="Blue">; SetForeColor((uint64)(byteA)<<16 | (uint64)(byteA)<<8 | (uint64)(byteA)); 
+                    float Alpha <name="Alpha">; SetForeColor(cNone); SetBackColor(cNone);
                     if (vectorSpacers) { FSkip(-1); BLANK blank; }
                 } HDRColor; 
                 SetBackColor(cNone);
@@ -768,7 +780,7 @@ typedef struct {
                 val = ReadUShort(FTell())-1;
             if (ReadUInt(FTell()) != 0 && sortByHandle && CR2WFile[level].exports[val] != -1) {
                 HANDLE Handle <hidden=true>; FSkip(-4);
-				if (Handle[handleIdx].Index > 0 && Handle[handleIdx].Index < CR2WFile[level].CR2WTable[4].itemCount) {
+				if (Handle[handleIdx].Index > 0 && Handle[handleIdx].Index <= CR2WFile[level].CR2WTable[4].itemCount) {
                 	iTemp = i, jTemp = j, zTemp = z, kTemp = k, i = Handle[handleIdx].Index - 1;
                 	struct CLASS Class <size=SizeCLASS>;
                 	CR2WFile[level].exports2[Handle[handleIdx].Index - 1] = 0;
@@ -844,9 +856,9 @@ typedef struct {
 		if (count == 3 && (exists(parentof(this).Type) && doesExist(parentof(this).Type.name,"olor")) 
         || (Type.type == "[3]Float" && Type.name == "v" && exists(parentof(this).ElementIdx))) {
             SetForeColor(byteR);
-            float Red; SetForeColor((uint64)(byteG)<<8);
-            float Green; SetForeColor((uint64)(byteB)<<16);
-            float Blue; SetForeColor(cNone);
+            float Value <name="Red">; SetForeColor((uint64)(byteG)<<8);
+            float Value <name="Green">; SetForeColor((uint64)(byteB)<<16);
+            float Value <name="Blue">; SetForeColor(cNone);
 		} else if (count >= 2) {
             for (z=0; z<count; z++) {
 				float Value;
@@ -979,8 +991,13 @@ typedef struct {
         numIndices = Value;
         numTriangles = (uint)(numIndices / 3);
         local int doMeshNextTime <hidden=true> = TRUE; 
-    }
-    
+    } else if (Type.type == "SharedDataBuffer" ) {
+        FSeek(startof(this)+8);
+        uint BufferSize;
+        local uint CR2WIndex <hidden=true>;
+        struct CR2W EmbeddedCR2WFile <size=SizeEmbeddedCR2WFile>;
+	}
+
     //local string subPropIdentifier <hidden=false> = "";
     local string lastProp <hidden=true> = "";
     local int ElementCounter <hidden=true> = 0;
@@ -993,22 +1010,17 @@ typedef struct {
                 propCount++;
             } else {
                 if (detectedProp(FTell())) {
-                    if (CR2WFile[level].NAMES.Name[ReadUShort(FTell()+2)].name == "SharedDataBuffer" ) {
-                        PROPSTART PackageHdr; FSkip(4); //start of new CR2W
-			            return;
-	                } else {  
-                        if (FTell() < dataEnd) {
-    
-                            if (doMesh == TRUE && count == 1)
-                                parseMesh();
-                            setColor();
-                            struct PROPERTY More;  //sub property
-                            propCount++;
-                            if (!doesExist(gType, "loat") && !doesExist(gType, "Uint8")) 
-                                SetBackColor(cNone);
-                        } else 
-                            break;
-		            }
+                    if (FTell() < dataEnd) {
+
+                        if (doMesh == TRUE && count == 1)
+                            parseMesh();
+                        setColor();
+                        struct PROPERTY More;  //sub property
+                        propCount++;
+                        if (!doesExist(gType, "loat") && !doesExist(gType, "Uint8")) 
+                            SetBackColor(cNone);
+                    } else 
+                        break;
                 } else FSkip(1);
             } 
 	    }
@@ -1057,7 +1069,16 @@ typedef struct {
             else if (exists(input.Path.Index) && input.Path.Index > 0 && exists(CR2WFile[input.Type.strIdx.lvl].CR2WImport.CR2WImport[input.Path.Index-1].path)) 
                 SPrintf( value,  "%Ld -- %s", input.Path.Index, CR2WFile[input.Type.strIdx.lvl].CR2WImport.CR2WImport[input.Path.Index-1].path);
         } else if (exists(input.Value)) {
-            if (doesExist(input.Type.type, "Float")) {
+            if (type == "[3]Float" || doesExist(type, "olor") || doesExist(type, "ector")) {
+                if (exists(input.Value[3]))
+                    SPrintf(value, "[%g, %g, %g, %g]", input.Value[0], input.Value[1], input.Value[2], input.Value[3]);
+                else if (exists(input.Value[2]))
+                    SPrintf(value, "[%g, %g, %g]", input.Value[0], input.Value[1], input.Value[2]);
+                else if (exists(input.Value[1]))
+                    SPrintf(value, "[%g, %g]", input.Value[0], input.Value[1]);
+                else SPrintf(value, "%g", input.Value);
+                return value;
+            } else if (doesExist(input.Type.type, "Float")) {
                 SPrintf(value,  "%g", input.Value);
             } else if (name == "Red" || name == "Green" || name == "Blue" || name == "Alpha") {
                 SPrintf( value,  "%g", (input.Value) / 255.0f);
@@ -1097,14 +1118,19 @@ typedef struct {
     string ReadVALUENAME (uint32 &input) { return (parentof(input).theType + hideNums); }
     
     void WritePROPERTY (PROPERTY &f, string s ) { 
-		if (Atoi(s) == 0 && exists(f.Path.Full_Path)) {
-            FileOpen(f.Path.Full_Path, TRUE, "hex", 0); 
+		if (exists(f.Path.Full_Path)) {
+            WritePATHINDEX(f.Path, s);
         } else if (exists(f.Index)) {
-            f.Index.Index = Atoi(s);
-        } else if (exists(f.Path.Index)) {
-            f.Path.Index = Atoi(s);
+            WriteSTRINGINDEX(f.Index, s);
         } else if (exists(f.Value)) {
-            if (f.Type.type != "Float" && (f.Type.name == "Red" || f.Type.name == "Green" || f.Type.name == "Blue" || f.Type.name == "Alpha")) {
+            //if (f.Type.type == "[3]Float" || doesExist(f.Type.type, "olor") || doesExist(f.Type.type, "ector"))
+            if (exists(f.Value[3])) {
+                WriteArray(f, s, 4);
+            } else if (exists(f.Value[2])) {
+                WriteArray(f, s, 3);
+            } else if (exists(f.Value[1])) {
+                WriteArray(f, s, 2);
+            } else if (f.Type.type != "Float" && (f.Type.name == "Red" || f.Type.name == "Green" || f.Type.name == "Blue" || f.Type.name == "Alpha")) {
                 f.Value = (float)(Atof(s) * 255.0);
             } else if (doesExist(f.theType, "int")) {
                 f.Value = Atof(s);
@@ -1112,7 +1138,29 @@ typedef struct {
                 f.Value = (float)Atof(s);
         }
     }
-
+    
+    void WriteArray(PROPERTY &r, string array, uint count) {
+        local uint q; 
+        local float outArr[count];
+        local string fmtString;
+        if (array[0] == 91)
+            fmtString += "[";
+        if (!doesExist(array, ",")) {
+            for (q=0; q<count-1; q++)
+                fmtString += "%g ";
+            fmtString += "%g";
+        } else {
+            for (q=0; q<count-1; q++)
+                fmtString += "%g,";
+            fmtString += "%g";
+        }
+        if (count == 2)
+            SScanf(array, fmtString, r.Value[0], r.Value[1]);
+        else if (count == 3)
+            SScanf(array, fmtString, r.Value[0], r.Value[1], r.Value[2]);
+        else if (count == 4)
+            SScanf(array, fmtString, r.Value[0], r.Value[1], r.Value[2], r.Value[3]);
+    }
 
 
 typedef struct {
@@ -1147,14 +1195,14 @@ typedef struct {
             if (detectedProp(FTell()) && FTell()+4 < classEnd) {
                 setColor();
                 PROPERTY Property;
-                if (exists(Property.Type) && title == "") {
-                    if (Property.Type.name == "id" || endsWith(Property.Type.name, "Id") || endsWith(Property.Type.type, "Id")) {
-                        if (exists(Property.Value))
-                            SPrintf(title, "%s = %Ld", Property.Type.name, Property.Value);
-                        else if (exists(Property.More[0].Value))
-                            SPrintf(title, "%s = %Ld", Property.Type.name, Property.More[0].Value);
-                    } else if (doesExist(Property.Type.type, "Ref") && exists(Property.Path)) {
-                        title = Property.Path.Path;
+                if (exists(this.Property.Type) && title == "") {
+                    if (this.Property.Type.name == "id" || endsWith(this.Property.Type.name, "Id") || endsWith(this.Property.Type.type, "Id")) {
+                        if (exists(this.Property.Value))
+                            SPrintf(title, "%s = %Ld", this.Property.Type.name, this.Property.Value);
+                        else if (exists(this.Property.More[0].Value))
+                            SPrintf(title, "%s = %Ld", this.Property.Type.name, this.Property.More[0].Value);
+                    } else if (doesExist(this.Property.Type.type, "Ref") && exists(this.Property.Path)) {
+                        title = this.Property.Path.Path;
                     }
                 }
                 propCount++;
@@ -1248,8 +1296,9 @@ typedef struct {
         } else if (sizeof(input) < 4) {
             s = "----------------------------------------------------------------";
         } else if (exists(parentof(input).Handle)) { //handles
+            
 			local uint idx = ReadUInt(startof(input))-1;
-			local uint clStart = CR2WFile[parentof(input).lvl].CR2WExport.CR2WExport[idx].dataOffset + 1;
+			local uint clStart = CR2WFile[parentof(input).lvl].CR2WExport.CR2WExport[idx].dataOffset + 1 + start;
 			if (CR2WFile[parentof(input).lvl].CR2WExport.CR2WExport[idx].dataSize < 4)
 				return "----------------------------------------------------------------";
 			if (clStart + 10 < FileSize() && exists(CR2WFile[parentof(input).lvl].NAMES.Name[ReadUShort(clStart)].name)) { //
@@ -1348,7 +1397,7 @@ typedef struct {
         char Magic[4];
         uint DecompressedSize;
         struct {
-            FSkip(CR2WFile[level].CR2WBuffer[idx].diskSize-8);
+            FSkip(CR2WFile[lvl].CR2WBuffer[idx].diskSize-8);
         } Data <name="Compressed Data">;
     }
 } KARK <name=ReadKARKNAME, read=ReadKARK, write=WriteKARK>;
@@ -1402,6 +1451,9 @@ typedef struct {
 
 //main CR2W struct
 typedef struct {
+    start = startof(this);
+    local int lvl <hidden=true> = level;
+    local int tempLvl <hidden=true> = level;
     struct {
         uint magic;
         uint version, flags;
@@ -1411,6 +1463,18 @@ typedef struct {
         uint CRC32, numChunks;
     } HEADER;
 
+    if (exists(parentof(this).CR2WIndex)) {
+        level = 0;
+        while(exists(CR2WFile[level])) {
+            if (startof(CR2WFile[level]) == start)
+                break;
+            level++;
+        }
+        lvl = level;
+        CR2WIndex = level;
+    }
+        
+    CR2WTableIdx = -1;
 	CR2WTABLE CR2WTable[10] <optimize=true, hidden=true>; //want ReadCR2WTABLE, but I dont want to have to optimize this or change all the code that uses it
 	FSeek(startof(CR2WTable)); 
 	struct {
@@ -1421,7 +1485,7 @@ typedef struct {
     if (CR2WTable[4].itemCount > maxExport)
         maxExport = CR2WTable[4].itemCount;
 
-    local int64 exports[maxExport] <hidden=true>, sizes[maxExport] <hidden=true>, exports2[maxExport] <hidden=true>, lvl <hidden=true> = level;
+    local int64 exports[maxExport] <hidden=true>, sizes[maxExport] <hidden=true>, exports2[maxExport] <hidden=true>;
     for (i=0; i < maxExport; i++) 
         { exports[i] = -1; exports2[i] = -1; }
 
@@ -1498,6 +1562,7 @@ typedef struct {
             }
         } BUFFERS;
     }
+    level = tempLvl;
 } CR2W <name=ReadCR2WNAME, read=ReadCR2W>;
     string ReadCR2W (CR2W &input) { 
         if (exists(input.DATA.Class[0].Property[0].path)) {
@@ -1507,7 +1572,15 @@ typedef struct {
         }
         return ""; 
     }
-    string ReadCR2WNAME (CR2W &input) { if (exists(input.DATA.Class[0].name)) return input.DATA.Class[0].name; return "";}
+    string ReadCR2WNAME (CR2W &input) { 
+        if (exists(input.DATA.Class[0].name)) 
+            return input.DATA.Class[0].name; 
+        if (exists(parentof(input).CR2WIndex))
+            return CR2WFile[parentof(input).CR2WIndex].DATA.Class[0].name; 
+        return "";
+    }
+
+    int SizeEmbeddedCR2WFile(CR2W &input) { return BufferSize; }
 
 //functions
 string Lower(string s) {
@@ -1728,8 +1801,8 @@ while (FTell() < FileSize() - 4 && ReadUInt(FTell()) == 1462915651 && ReadUInt64
     CR2W CR2WFile;
     if (classSpacer && !exists(CR2WFile[1]) && FTell() == FileSize())
         { FSkip(-1); BLANK ___; }
-    if (startof(CR2WFile[level]) + CR2WFile[level].HEADER.bufferSize < FTell())
-        FSeek(startof(CR2WFile[level]) + CR2WFile[level].HEADER.fileSize);
+    if (startof(CR2WFile[level].DATA) < FTell() )
+        FSeek(startof(CR2WFile[level].DATA));
     level++;
     while (FTell() < FileSize() - 4 && ReadUInt(FTell()) != 1462915651)
         FSkip(1);
