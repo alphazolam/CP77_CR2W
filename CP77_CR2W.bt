@@ -350,9 +350,9 @@ typedef struct {
 	local string name <hidden=true> = CR2WFile[level].NAMES.Name[strIdx.Index].name;
 	local string type <hidden=true> = CR2WFile[level].NAMES.Name[dataType.Index].name;
     
-    if ((doesExist(type,"rRef:") && (ReadUInt(FTell()-8) == 10))) {
+    if ((doesExist(type,"rRef:") && (ReadUInt() > CR2WFile[level].NAMES.NameCount ))) { //== 10
         local int size = 2;
-    } else if (FTell() + 4 < FileSize() && ReadUInt(FTell()) < FileSize() - FTell() + 2) { 
+    } else if (FTell() + 4 < FileSize() && ReadUInt() < FileSize() - FTell() + 2) { 
         uint32 size;
 	} else local ushort size <hidden=false> = 0;
     
@@ -849,10 +849,16 @@ typedef struct {
         if (theType == "LocalizationString") uint64 Hash;
 		STRING String;
     } else if (doesExist( Type.type, "Ref:")) {
-		for (k=0; k<count; k++)
+		for (k=0; k<count; k++) {
 			if (doesExist( Type.type, "aterial") && count == matCount && exists(CR2WFile[level].NAMES.Name[mats[k]].name))
 				PATHINDEX Path <name=ReadPATHINDEXMATNAME>;
-			else PATHINDEX Path; 
+			else 
+                PATHINDEX Path;
+            if (ReadUInt() <= 100) {
+                uint unknown;
+                Type.size = 6;
+            }
+        }
 	} else if (theType == "TweakDBID" ) {
 		uint Value <name="ID">;
         uint Ukn <name="Hashed String Length">;
@@ -1148,7 +1154,7 @@ typedef struct {
             }
         } else if (exists(input.Index) && exists(CR2WFile[input.Index.lvl].NAMES.Name[input.Index.Index].name)) {
             SPrintf( value,  "%s (%u)", CR2WFile[input.Index.lvl].NAMES.Name[input.Index.Index].name, input.Index.Index); 
-        } else if (exists(input.More) && exists(input.More[0].Value) && input.More[0].theName == "Red") { //&& input.More.theType == "Float"
+        } else if (exists(input.More) && exists(input.More[0].theName) && input.More[0].theName == "Red") { //&& input.More.theType == "Float"
             value = SPrintf(value, "[%g", input.More[0].Value);
             local ubyte ctr = 1;
             while (exists(input.More[ctr])) {
@@ -1587,7 +1593,7 @@ typedef struct {
             start = tempStart;
             FSeek(startof(this) + CR2WFile[lvl].CR2WBuffer[idx].diskSize);
         } Decompressed_Data <read=readDECOMPRESSEDKARK, write=WriteDECOMPRESSEDKARK, size=sizeDECOMPRESSEDKARK>;
-    } else {
+    } else if (FTell() + 8 <= FileSize()) {
         char Magic[4];
         uint DecompressedSize;
         struct {
@@ -1609,7 +1615,7 @@ typedef struct {
     int GetKARKindex(uint offset) {
         local ushort lvl, h = getLevel(offset);
         for (h=0; h<CR2WFile[lvl].CR2WTable[5].itemCount; h++)
-            if (startof(CR2WFile[lvl].BUFFERS.BUFFER[h]) == offset)
+            if (exists(CR2WFile[lvl].BUFFERS.BUFFER[h]) && startof(CR2WFile[lvl].BUFFERS.BUFFER[h]) == offset)
                 return h;
         return 0;
             
@@ -1626,8 +1632,26 @@ typedef struct {
         return s;
     }
     
+    int SizeKARK(KARK &input) { 
+        if (exists(parentof(input).diskSize))
+            return parentof(input).diskSize;
+        local uint st = startof(input);
+        if (st <= FileSize() - 4) {
+            if (ReadUInt(startof(input)) == 1263681867)
+                return ReadUInt(startof(input)+4) + 8;
+            if (ReadUInt(startof(input)) == 1462915651) {
+                local ushort idx = getLevelNoRead(startof(input));
+                if (exists(CR2WFile[level].CR2WBuffers.CR2WBuffer[idx])) 
+                    return CR2WFile[level].CR2WBuffers.CR2WBuffer[idx].diskSize; 
+            }
+        }
+        return 4;
+    }
+
     int sizeDECOMPRESSEDKARK(DECOMPRESSEDKARK &input) { return CR2WFile[level].CR2WBuffer[k].diskSize; }
+    
     string readDECOMPRESSEDKARK(DECOMPRESSEDKARK &input) {return "    [Input Here to save as file]"; }
+
     void WriteDECOMPRESSEDKARK(DECOMPRESSEDKARK &input, string s) {
         if (s != "    [Input Here to save as file]") {
             local string newBufferFileName;
@@ -1744,6 +1768,10 @@ typedef struct {
         struct {
             struct CR2WBUFFER {
                 uint flags, index, offset, diskSize, memSize, crc32;
+                FSeek(start + offset);
+                local ushort lvl <hidden=true> = level;
+                struct KARK Buffer <size=SizeKARK>;
+                FSeek(startof(crc32)+4);
             } CR2WBuffer[CR2WFile[level].CR2WTable[5].itemCount] <optimize=false, read=ReadCR2WBuffer>;
         } CR2WBuffers;
     }
@@ -1813,20 +1841,13 @@ typedef struct {
         return "";
     }
     
-    int SizeBufferCR2W(CR2W &input) { return CR2WFile[level].CR2WBuffers.CR2WBuffer[getLevelNoRead(startof(input))].memSize; }
-    
-    int SizeKARK(KARK &input) { 
-        local ushort idx = getLevelNoRead(startof(input));
-        if (exists(CR2WFile[level].CR2WBuffers.CR2WBuffer[idx])) 
-            return CR2WFile[level].CR2WBuffers.CR2WBuffer[idx].memSize; 
-        return 4;
-    }
+    int SizeBufferCR2W(CR2W &input) { return ReadUInt(startof(input)+24); }
     
     int SizeEmbeddedCR2WFile(CR2W &input) { return BufferSize; }
 
     string ReadCR2WBuffer(struct CR2WBUFFER &input) {
         local ubyte idx = (startof(input) - startof(parentof(input))) / sizeof(input);
-        if (exists(CR2WFile[0].CR2WBuffer[idx]))
+        if (exists(CR2WFile[0].CR2WBuffer[idx]) && exists(CR2WFile[0].BUFFERS.BUFFER[idx]))
             return ReadKARK(CR2WFile[0].BUFFERS.BUFFER[idx]);
         return "";
     }

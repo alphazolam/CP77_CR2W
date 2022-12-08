@@ -3,21 +3,19 @@
 //
 //      File: CP77_CR2W_changeValues.1sc
 //   Authors: alphaZomega
-//   Version: 0.2
+//   Version: 0.3
 //   Purpose: Select the bytes you want to change values in, then run the script
 //  Category: CP77_CR2W
-//   History: September 29, 2021
+//   History: December 8th, 2022
 //------------------------------------------------
 
 //Options:
-local byte inputValue = FALSE; // Set this to FALSE to make your own automated scripts with this script below
+local byte inputValue = TRUE; // Set this to FALSE to make your own automated scripts with this script below
 
 
 //Each "runScript" is like an execution of the normal script, but the values don't need to be inputted:
 void runScripts() 
 {   //runScript(nameToFind, typeToFind, searchValue, changeValue)
-    
-    
     runScript("chunkMaterials", "", "", "blue"); //example
     //runScript("", "", "blue", "60");
 }
@@ -156,16 +154,18 @@ void runScript(string nmToFind, string typToFind, string srchValue, string chngV
     }
     
     CR2WIdx = 0;
-    while(exists(CR2WFile[CR2WIdx]) && (startof(CR2WFile[CR2WIdx]) >= lowerBound
-    && startof(CR2WFile[CR2WIdx]) + sizeof(CR2WFile[CR2WIdx]) <= upperBound )) {
+    while(exists(CR2WFile[CR2WIdx]) && lowerBound >= startof(CR2WFile[CR2WIdx])
+    && upperBound <= startof(CR2WFile[CR2WIdx]) + sizeof(CR2WFile[CR2WIdx]) ) {
         a = 0;
-        while (exists(CR2WFile[CR2WIdx].DATA.Class[a]) && (startof(CR2WFile[CR2WIdx].DATA.Class[a]) >= lowerBound
-        && startof(CR2WFile[CR2WIdx].DATA.Class[a]) + sizeof(CR2WFile[CR2WIdx].DATA.Class[a]) <= upperBound )) {
-            f = 0;
-            while (exists(CR2WFile[CR2WIdx].DATA.Class[a].Property[f]) && (startof(CR2WFile[CR2WIdx].DATA.Class[a].Property[f]) >= lowerBound
-            && startof(CR2WFile[CR2WIdx].DATA.Class[a].Property[f]) + sizeof(CR2WFile[CR2WIdx].DATA.Class[a].Property[f]) <= upperBound )) {
-                changeProp(CR2WFile[CR2WIdx].DATA.Class[a].Property[f]);
-                f++;
+        while (exists(CR2WFile[CR2WIdx].DATA.Class[a])) {
+            if (startof(CR2WFile[CR2WIdx].DATA.Class[a]) >= lowerBound) { 
+            //&& startof(CR2WFile[CR2WIdx].DATA.Class[a]) + sizeof(CR2WFile[CR2WIdx].DATA.Class[a]) <= upperBound 
+                f = 0;
+                while (exists(CR2WFile[CR2WIdx].DATA.Class[a].Property[f]) && (startof(CR2WFile[CR2WIdx].DATA.Class[a].Property[f]) >= lowerBound
+                && startof(CR2WFile[CR2WIdx].DATA.Class[a].Property[f]) + sizeof(CR2WFile[CR2WIdx].DATA.Class[a].Property[f]) <= upperBound )) {
+                    changeProp(CR2WFile[CR2WIdx].DATA.Class[a].Property[f]);
+                    f++;
+                }
             }
             a++;
         }
@@ -183,13 +183,13 @@ if (GetSelSize() > 3 ) {
 
 if (inputValue) {
         
-    nameToFind = InputString("Change Values", "Input Name to find", "");
-    typeToFind = InputString("Change Values", "Input Type to find", "");
+    nameToFind = InputString("Change Values", "Input Property Name to find", "");
+    typeToFind = InputString("Change Values", "Input Property Type to find", "");
     
     if (GetSelSize() && GetSelSize() > 64)
         Printf("Will change %s %s variables within range: [%u to %u]\n\n", typeToFind, nameToFind, lowerBound, upperBound);
     
-    string msg; SPrintf(msg, "Or leave blank to change all %s %s values", typeToFind, nameToFind);
+    string msg; SPrintf(msg, "Leave blank to change all %s %s values", typeToFind, nameToFind);
     searchValue = InputString("Input old value to find", msg, "");    
     changeValue = InputString("Input New Value", "Example:\n5 = Change to 5\n*1 = Multiply by 1\n\\2 = Divide by 2\n+1.4 = Add 1.4\n+-3 = Subtract 3", "*1");
     Printf("ChangeValue: %s\n", changeValue);

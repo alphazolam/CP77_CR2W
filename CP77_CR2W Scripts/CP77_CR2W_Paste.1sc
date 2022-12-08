@@ -3,10 +3,10 @@
 //
 //      File: CP77_CR2W_Paste.1sc
 //   Authors: alphaZomega
-//   Version: 0.32
+//   Version: 0.33
 //   Purpose: Paste copied properties into other classes of the same CR2WFile
 //  Category: CP77_CR2W
-//   History: December 7, 2022
+//   History: December 8, 2022
 //------------------------------------------------
 //Option:                                                           Effect:
 local uint Run_Template_After_Completion = FALSE;                   //Run the template after completing the script
@@ -115,7 +115,7 @@ void InsertNewCR2WImport() {
     SPrintf(s, "Inserted new filepath string at position %u\n", writeOffset); output += s;
 }
 
-void InsertCR2WExport() {   
+void InsertNewCR2WExport() {   
     uint newClassOffset = 24 + startof(CR2WFile[CR2WIdx])
         + CR2WFile[CR2WIdx].CR2WExport.CR2WExport[CR2WFile[CR2WIdx].CR2WTable[4].itemCount-1].dataOffset 
         + CR2WFile[CR2WIdx].CR2WExport.CR2WExport[CR2WFile[CR2WIdx].CR2WTable[4].itemCount-1].dataSize;
@@ -140,7 +140,7 @@ void InsertCR2WExport() {
     SPrintf(s, "Inserted new Class at position %u\n", newClassOffset); output += s;
 } 
 
-void InsertCR2WBuffer() {
+void InsertNewCR2WBuffer() {
     uint newBufferOffset = FileSize()+24;
     for (i=0; i<CR2WFile[CR2WIdx].CR2WTable[4].itemCount; i++)
         CR2WFile[CR2WIdx].CR2WExport.CR2WExport[i].dataOffset += 24;
@@ -188,7 +188,7 @@ void InsertNewProperty() {
     if (CR2WFile[CR2WIdx].CR2WExport.CR2WExport[ExportIdx].dataSize == 0)
         InsertBytes(cpos, 1, 0); 
     SetSelection(cpos, 0);
-    PasteFromClipboard();
+    PasteFromClipboard(); 
     //addedSize = GetSelSize();
 
     if (cpos == classStart) {
@@ -296,6 +296,7 @@ else if (cpos > startof(CR2WFile[CR2WIdx].DATA) && cpos < startof(CR2WFile[CR2WI
     PasteFromClipboard();
     addedSize = GetSelSize();
     DeleteBytes(cpos, addedSize);
+    SetCursorPos(cpos);
 } else {
     SPrintf(s, "Select a valid class, property, CR2WExport, CR2WImport, CR2WProperty, CR2WBuffer or CName\n"); output += s;
     Printf(output);
