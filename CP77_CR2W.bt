@@ -1572,8 +1572,8 @@ typedef struct {
 typedef struct {
     tmpLv = level;
     if (sizeof(this) != 0) {
+       level = lvl;
        k = GetKARKindex(FTell());
-       level = getLevel(FTell());
     }
     local uint endPos <hidden=true> = CR2WFile[level].CR2WBuffer[k].offset + CR2WFile[level].CR2WBuffer[k].diskSize;
     local uint idx <hidden=true> = k, lvl <hidden=true> = level, tempStart <hidden=true> = start;
@@ -2024,7 +2024,7 @@ void parseMesh() {
             FSeek(scanForProp("quantizationOffset", "Vector4"));
             if (detectedProp(FTell())) {
                 struct PROPERTY qOffs <hidden=true>;
-                qOX = qOffs.Vector4.More[0].Value, qOY = qOffs.Vector4.More[1].Value, qOZ = qOffs.Vector4.More[2].Value;
+                qOX = qOffs.More.More[0].Value, qOY = qOffs.More.More[1].Value, qOZ = qOffs.More.More[2].Value;
             }
         }
         if (qSX == 0) {
@@ -2032,7 +2032,7 @@ void parseMesh() {
             FSeek(scanForProp("quantizationScale", "Vector4"));
             if (detectedProp(FTell())) {
                 struct PROPERTY qScale <hidden=true>;
-                qSX = qScale.Vector4.More[0].Value, qSY = qScale.Vector4.More[1].Value, qSZ = qScale.Vector4.More[2].Value;
+                qSX = qScale.More.More[0].Value, qSY = qScale.More.More[1].Value, qSZ = qScale.More.More[2].Value;
             }
         }
         FSeek(CR2WFile[level].CR2WBuffer[parseBuffer].offset + meshOffset);
