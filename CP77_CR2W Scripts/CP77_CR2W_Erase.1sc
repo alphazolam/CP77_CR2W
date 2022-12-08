@@ -3,10 +3,10 @@
 //
 //      File: CP77_CR2W_EraseProp.1sc
 //   Authors: alphaZomega
-//   Version: 0.1
+//   Version: 0.11
 //   Purpose: Erase properties, classes and variables from CR2Wfiles
 //  Category: CP77_CR2W
-//   History: Mar 27 2021
+//   History: December 7, 2022
 //------------------------------------------------
 //Option:                                                           Effect:
 local uint Run_Template_After_Completion = TRUE;                    //Run the template after completing the script
@@ -116,5 +116,7 @@ CR2WFile[CR2WIdx].HEADER.bufferSize += subtractedSize;
 
 if (Run_Template_After_Completion)
     RunTemplate("", true);
-WriteByte(7,0);
 Printf(output);
+if (!Run_Template_After_Completion && subtractedSize != 0)
+    Printf("Press F5 to refresh the template and fix template results\n")
+WriteByte(7,0);

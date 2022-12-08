@@ -1,0 +1,95 @@
+//------------------------------------------------
+//--- 010 Editor v10.0.2 Script File
+//
+//      File: CP77_CR2W_multiplyColors.1sc
+//   Authors: alphaZomega
+//   Version: 
+//   Purpose: Select the bytes you want to change colors in, then run the script
+//  Category: CP77_CR2W
+//   History: 
+//------------------------------------------------
+
+//global vars
+uint64 a, f, c, d, i;
+uint CR2WIdx = 0;
+uint lowerBound = 0, upperBound = FileSize();
+
+//functions
+void fixProp(PROPERTY& prop) {
+    local uint x = 0, newVal;
+    if (exists(prop.More[d].Value) && exists(prop.More[d].Type.strIdx.String) && sizeof(prop.More[d].Value) == 1) {
+        for (d=0; d<3; d++){
+            if (startof(prop.More[d].Value) < lowerBound || startof(prop.More[d].Value) >= upperBound)
+                break;
+            newVal = -1;
+            if (prop.More[d].Type.strIdx.String == "Red" )
+                newVal = (uint)prop.More[d].Value * multiR;
+            if (prop.More[d].Type.strIdx.String == "Green" )
+                newVal = (uint)prop.More[d].Value * multiG;
+            if (prop.More[d].Type.strIdx.String == "Blue" )
+                newVal = (uint)prop.More[d].Value * multiB;
+            if (newVal > 255) 
+                newVal = 255;
+            if (newVal != -1)
+                prop.More[d].Value = newVal;
+        }
+    } else if (exists(prop.Value[2])){
+        if (startof(prop.Value[0]) >= lowerBound && startof(prop.Value[0]) < upperBound)
+            prop.Value[0] *= multiR;
+        if (startof(prop.Value[1]) >= lowerBound && startof(prop.Value[0]) < upperBound)
+            prop.Value[1] *= multiG;
+        if (startof(prop.Value[2]) >= lowerBound && startof(prop.Value[0]) < upperBound)
+            prop.Value[2] *= multiB;
+    } else while (exists(prop.HDRColor[x].Value[0])) {
+        if (startof(prop.HDRColor[x].Value[0]) >= lowerBound && startof(prop.HDRColor[x].Value[0]) < upperBound)
+            prop.HDRColor[x].Value[0] *= multiR;
+        if (startof(prop.HDRColor[x].Value[1]) >= lowerBound && startof(prop.HDRColor[x].Value[1]) < upperBound)
+            prop.HDRColor[x].Value[1] *= multiG;
+        if (startof(prop.HDRColor[x].Value[2]) >= lowerBound && startof(prop.HDRColor[x].Value[2]) < upperBound)
+            prop.HDRColor[x].Value[2] *= multiB;
+        x++;
+    }
+}
+
+void findProp(PROPERTY& prop) {
+    if (exists(prop.Type) 
+    && (doesExist(prop.Type.type, "]Float") || ((doesExist(prop.Type.type, "olor") || doesExist(prop.Type.name, "olor")) && !doesExist(prop.Type.type, "Layer")) )) { 
+        fixProp(prop);
+    } else {
+        local int p = 0;
+        while (exists(prop.More[p])) {
+            findProp(prop.More[p]);
+            p++;
+        }
+    }
+}
+
+//start of script
+if (GetSelSize() > 3 ) { //&& GetSelStart() > startof(CR2WFile[CR2WIdx].DATA)
+    lowerBound = GetSelStart();
+    upperBound = GetSelStart() + GetSelSize();
+    
+    while (exists(CR2WFile[CR2WIdx])) {
+        if (startof(CR2WFile[CR2WIdx]) <= lowerBound && startof(CR2WFile[CR2WIdx]) + sizeof(CR2WFile[CR2WIdx]) >= upperBound) //
+            break;
+        CR2WIdx++;
+    }
+    Printf("CR2WFile[%i]\n", CR2WIdx);
+} 
+if ((GetSelSize() <= 3 && level > 0) || !exists(CR2WFile[CR2WIdx])) {
+    CR2WIdx = InputNumber("Select CR2W level", "Choose a CR2W[] number: ", "");
+    if (CR2WIdx > level) 
+        return "No such CR2WFile";
+}
+
+float multiR = InputFloat("Multiply Colors", "Red multiplier", "1"); if (multiR == -534276576.0) return;
+float multiG = InputFloat("Multiply Colors", "Green multiplier", "1"); if (multiG == -534276576.0) return;
+float multiB = InputFloat("Multiply Colors", "Blue multiplier", "1"); if (multiB == -534276576.0) return;
+
+for (a=0; a<CR2WFile[CR2WIdx].CR2WTable[4].itemCount; a++){
+    f = 0;
+    while (exists(CR2WFile[CR2WIdx].DATA.Class[a].Property[f])) {
+        findProp(CR2WFile[CR2WIdx].DATA.Class[a].Property[f]);
+        f++;
+    }
+}

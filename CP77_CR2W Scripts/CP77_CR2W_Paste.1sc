@@ -1,15 +1,15 @@
 //------------------------------------------------
 //--- 010 Editor v9.0.2 Script File
 //
-//      File: CP77_CR2W_PasteProp.1sc
+//      File: CP77_CR2W_Paste.1sc
 //   Authors: alphaZomega
-//   Version: 0.3
+//   Version: 0.32
 //   Purpose: Paste copied properties into other classes of the same CR2WFile
 //  Category: CP77_CR2W
-//   History: Mar 27 2021
+//   History: December 7, 2022
 //------------------------------------------------
 //Option:                                                           Effect:
-local uint Run_Template_After_Completion = TRUE;                    //Run the template after completing the script
+local uint Run_Template_After_Completion = FALSE;                   //Run the template after completing the script
 
 
 string s, output; 
@@ -45,23 +45,8 @@ int findProp(PROPERTY& prop) {
     return false;
 }
 
-
-//start of script
-uint CR2WIdx = 0; 
-uint originalSize = FileSize();
-
-for (i=0; i<level+1; i++)
-    if (startof(CR2WFile[i]) < cpos && startof(CR2WFile[i]) + sizeof(CR2WFile[i]) > cpos) {
-        CR2WIdx = i;
-        break;
-    }
-
-//insert new CName
-if (cpos < startof(CR2WFile[CR2WIdx].NAMES) + sizeof(CR2WFile[CR2WIdx].NAMES) && cpos >= startof(CR2WFile[CR2WIdx].NAMES)) 
-{
-    CNAME newCName = InputString("Insert Enum", "What string do you want to insert?", "");
-    if (newCName == "") return false;
-    addedSize = 8 + sizeof(newCName);
+void InsertNewCName() {
+    
     uint nameIdx = CR2WFile[CR2WIdx].CR2WTable[1].itemCount; 
     uint writeOffset = startof(CR2WFile[CR2WIdx].NAMES.Name[CR2WFile[CR2WIdx].CR2WTable[1].itemCount-1].name) 
         + sizeof(CR2WFile[CR2WIdx].NAMES.Name[CR2WFile[CR2WIdx].CR2WTable[1].itemCount-1].name);
@@ -94,15 +79,9 @@ if (cpos < startof(CR2WFile[CR2WIdx].NAMES) + sizeof(CR2WFile[CR2WIdx].NAMES) &&
     WriteString(writeOffset, newCName);
     SPrintf(s, "Inserted new Enum at position %u\n", FTell()); output += s;
     SPrintf(s, "Inserted new CName string at position %u\n", writeOffset); output += s;
-} 
-//insert new CR2WImport
-else if ((exists(CR2WFile[CR2WIdx].CR2WImport) && (cpos < startof(CR2WFile[CR2WIdx].CR2WImport) + sizeof(CR2WFile[CR2WIdx].CR2WImport) && cpos >= startof(CR2WFile[CR2WIdx].CR2WImport)))
-    || (cpos < startof(CR2WFile[CR2WIdx].CR2WProperty) + 16 && cpos >= startof(CR2WFile[CR2WIdx].CR2WProperty)))
-{
-    CNAME newFile = InputString("Insert CR2WImport", "What filepath do you want to insert?", "");
-    if (newFile == "")
-        return false;
-    addedSize = 8 + sizeof(newFile);
+}
+
+void InsertNewCR2WImport() {
     uint nameIdx = CR2WFile[CR2WIdx].CR2WTable[1].itemCount; 
     
     if (exists(CR2WFile[CR2WIdx].CR2WImport)) {
@@ -134,10 +113,9 @@ else if ((exists(CR2WFile[CR2WIdx].CR2WImport) && (cpos < startof(CR2WFile[CR2WI
     CR2WFile[CR2WIdx].CR2WTable[2].itemCount++;
     SPrintf(s, "Inserted new CR2WImport at position %u\n", FTell()); output += s;
     SPrintf(s, "Inserted new filepath string at position %u\n", writeOffset); output += s;
-} 
-//insert new CR2WExport
-else if (cpos >= startof(CR2WFile[CR2WIdx].CR2WExport) && cpos < startof(CR2WFile[CR2WIdx]) + CR2WFile[CR2WIdx].CR2WTable[4].offset + CR2WFile[CR2WIdx].CR2WTable[4].itemCount * 24)
-{   
+}
+
+void InsertCR2WExport() {   
     uint newClassOffset = 24 + startof(CR2WFile[CR2WIdx])
         + CR2WFile[CR2WIdx].CR2WExport.CR2WExport[CR2WFile[CR2WIdx].CR2WTable[4].itemCount-1].dataOffset 
         + CR2WFile[CR2WIdx].CR2WExport.CR2WExport[CR2WFile[CR2WIdx].CR2WTable[4].itemCount-1].dataSize;
@@ -160,10 +138,9 @@ else if (cpos >= startof(CR2WFile[CR2WIdx].CR2WExport) && cpos < startof(CR2WFil
     CR2WFile[CR2WIdx].CR2WTable[4].itemCount += 1;
     SPrintf(s, "Inserted new CR2WExport at position %u\n", FTell()); output += s;
     SPrintf(s, "Inserted new Class at position %u\n", newClassOffset); output += s;
-} //insert new CR2WBuffer
-else if ((exists(CR2WFile[CR2WIdx].CR2WBuffer) && cpos > startof(CR2WFile[CR2WIdx].CR2WBuffer) && cpos < startof(CR2WFile[CR2WIdx]) + CR2WFile[CR2WIdx].CR2WTable[5].offset + CR2WFile[CR2WIdx].CR2WTable[5].itemCount * 24)
-    || cpos == startof(CR2WFile[CR2WIdx].CR2WTables))
-{
+} 
+
+void InsertCR2WBuffer() {
     uint newBufferOffset = FileSize()+24;
     for (i=0; i<CR2WFile[CR2WIdx].CR2WTable[4].itemCount; i++)
         CR2WFile[CR2WIdx].CR2WExport.CR2WExport[i].dataOffset += 24;
@@ -183,18 +160,20 @@ else if ((exists(CR2WFile[CR2WIdx].CR2WBuffer) && cpos > startof(CR2WFile[CR2WId
     CR2WFile[CR2WIdx].HEADER.bufferSize += 24;
     CR2WFile[CR2WIdx].CR2WTable[5].itemCount += 1;
     SPrintf(s, "Inserted new CR2WBuffer at position %u\n", FTell()); output += s;
-} //insert new property
-else if (cpos > startof(CR2WFile[CR2WIdx].DATA) && cpos < startof(CR2WFile[CR2WIdx].DATA) + sizeof(CR2WFile[CR2WIdx].DATA)) 
-{
+}
+
+void InsertNewProperty() {
     uint ExportIdx = -1; 
     uint dataSz = 0;
+    
     for (i=0; i<CR2WFile[CR2WIdx].CR2WTable[4].itemCount; i++) {
         dataSz = CR2WFile[CR2WIdx].CR2WExport.CR2WExport[i].dataSize;
         if (startof(CR2WFile[CR2WIdx]) + CR2WFile[CR2WIdx].CR2WExport.CR2WExport[i].dataOffset + dataSz > cpos) {
             if (exists(CR2WFile[CR2WIdx].CR2WExport.CR2WExport[i+1]) && CR2WFile[CR2WIdx].CR2WExport.CR2WExport[i+1].dataOffset == CR2WFile[CR2WIdx].CR2WExport.CR2WExport[i].dataOffset) {
                 SPrintf(s, "%u", i);
                 ExportIdx = InputNumber("Multiple Classes", "Which Class number are you adding to?", s);
-            } else ExportIdx = i;
+            } else 
+                ExportIdx = i;
             break;
         }
     }
@@ -210,7 +189,7 @@ else if (cpos > startof(CR2WFile[CR2WIdx].DATA) && cpos < startof(CR2WFile[CR2WI
         InsertBytes(cpos, 1, 0); 
     SetSelection(cpos, 0);
     PasteFromClipboard();
-    addedSize = GetSelSize();
+    //addedSize = GetSelSize();
 
     if (cpos == classStart) {
         InsertBytes(cpos, 1, 0);
@@ -236,19 +215,135 @@ else if (cpos > startof(CR2WFile[CR2WIdx].DATA) && cpos < startof(CR2WFile[CR2WI
         CR2WFile[CR2WIdx].CR2WBuffer[i].offset += addedSize;
     CR2WFile[CR2WIdx].HEADER.fileSize += addedSize;
     CR2WFile[CR2WIdx].HEADER.bufferSize += addedSize;
+}
+
+//General offset fixer
+void FixOffsets(uint64 tell, uint64 limitPoint, uint64 insertPoint, uint64 addedSz, int doInt32) {
+    if (tell > limitPoint)
+        return;
+    local uint64 pos = FTell();
+    local int64 tmp;
+    local int varSize = 8 + -4 * doInt32;
+    FSeek(tell);
+    while(FTell() + varSize <= limitPoint) {
+        if (FTell()+varSize > FileSize()) 
+            break;
+        if (doInt32==1)
+            tmp = ReadInt(FTell());
+        else 
+            tmp = ReadInt64(FTell());
+        
+        if (tmp >= insertPoint && tmp < FileSize()) {
+            //Printf("%i  >? %i @ position %i (limit %i) added +%i\n", tmp, insertPoint, FTell(), limitPoint, addedSz);
+            if (doInt32==1) 
+                tmp = WriteUInt(FTell(), tmp+addedSz);
+            else WriteUInt64(FTell(), tmp + addedSz);
+        }
+        FSkip(varSize);
+    }
+}
+
+
+//start of script========================================================================================
+uint CR2WIdx, I; 
+byte nested = -1;
+uint oldFileSize = FileSize();
+while(exists(CR2WFile[I])) {
+    if (cpos >= startof(CR2WFile[I]) && cpos < startof(CR2WFile[I]) + sizeof(CR2WFile[I])) {
+        Printf("cpos: %i i: %i s: %i e: %i\n", cpos, I, startof(CR2WFile[I]), startof(CR2WFile[I]) + sizeof(CR2WFile[I]));
+        CR2WIdx = I;
+        nested++;
+    }
+    I++;
+}
+
+local ubyte doCName = false;
+local ubyte doCR2WImport = false;
+local ubyte doCR2WExport = false;
+local ubyte doProperty = false;
+local ubyte doCR2WBuffer = false;
+
+//insert new CName
+if (cpos < startof(CR2WFile[CR2WIdx].NAMES) + sizeof(CR2WFile[CR2WIdx].NAMES) && cpos >= startof(CR2WFile[CR2WIdx].NAMES)) 
+{
+    doCName = true;
+    CNAME newCName = InputString("Insert Enum", "What string do you want to insert?", "");
+    if (newCName == "") return false;
+    addedSize = 8 + sizeof(newCName);
+} 
+//insert new CR2WImport
+else if ((exists(CR2WFile[CR2WIdx].CR2WImport) && (cpos < startof(CR2WFile[CR2WIdx].CR2WImport) + sizeof(CR2WFile[CR2WIdx].CR2WImport) && cpos >= startof(CR2WFile[CR2WIdx].CR2WImport)))
+    || (cpos < startof(CR2WFile[CR2WIdx].CR2WProperty) + 16 && cpos >= startof(CR2WFile[CR2WIdx].CR2WProperty)))
+{
+    doCR2WImport = true;
+    CNAME newFile = InputString("Insert CR2WImport", "What filepath do you want to insert?", "");
+    addedSize = 8 + sizeof(newFile);
+} 
+//insert new CR2WExport
+else if (cpos > startof(CR2WFile[CR2WIdx].CR2WExport) && cpos < startof(CR2WFile[CR2WIdx]) + CR2WFile[CR2WIdx].CR2WTable[4].offset + CR2WFile[CR2WIdx].CR2WTable[4].itemCount * 24)
+{   
+    doCR2WExport = true;
+} //insert new CR2WBuffer
+else if ((exists(CR2WFile[CR2WIdx].CR2WBuffer) && cpos > startof(CR2WFile[CR2WIdx].CR2WBuffer) && cpos < startof(CR2WFile[CR2WIdx]) + CR2WFile[CR2WIdx].CR2WTable[5].offset + CR2WFile[CR2WIdx].CR2WTable[5].itemCount * 24)
+    || cpos == startof(CR2WFile[CR2WIdx].CR2WTables))
+{
+    doCR2WBuffer = true;
+} //insert new property
+else if (cpos > startof(CR2WFile[CR2WIdx].DATA) && cpos < startof(CR2WFile[CR2WIdx].DATA) + sizeof(CR2WFile[CR2WIdx].DATA)) 
+{
+    doProperty = true;
+    SetSelection(cpos, 0);
+    PasteFromClipboard();
+    addedSize = GetSelSize();
+    DeleteBytes(cpos, addedSize);
 } else {
     SPrintf(s, "Select a valid class, property, CR2WExport, CR2WImport, CR2WProperty, CR2WBuffer or CName\n"); output += s;
     Printf(output);
     return false;
 }
 
-if (FileSize() == originalSize) {
-    SPrintf(s, "\nWARNING: Bytes not inserted! Press \"Insert\" on your keyboard\n"); output += s; 
+if (nested > 0) {
+    local int kk;
+    I=0;
+    while(exists(CR2WFile[I])) {
+        if (cpos >= startof(CR2WFile[I]) && cpos < startof(CR2WFile[I]) + sizeof(CR2WFile[I])) {
+            
+            if (startof(CR2WFile[I]) > 0 && CR2WFile[CR2WIdx].HEADER.fileSize == ReadUInt(startof(CR2WFile[I])-4)) { //SharedDataBuffer
+                WriteUInt(startof(CR2WFile[I])-4, CR2WFile[CR2WIdx].HEADER.fileSize+addedSize); //BufferSize
+                WriteUInt(startof(CR2WFile[I])-8, CR2WFile[CR2WIdx].HEADER.fileSize+addedSize+8); //Size
+            }
+            FixOffsets(startof(CR2WFile[I])+20, startof(CR2WFile[I].NAMES),  cpos - startof(CR2WFile[I]), FileSize() - oldFileSize, true);
+            if (exists(CR2WFile[I].NAMES))
+                FixOffsets(startof(CR2WFile[I].NAMES), startof(CR2WFile[I].NAMES)+sizeof(CR2WFile[I].NAMES),  cpos - startof(CR2WFile[I]), FileSize() - oldFileSize, true);
+            if (exists(CR2WFile[I].FILES))
+                FixOffsets(startof(CR2WFile[I].FILES), startof(CR2WFile[I].FILES)+sizeof(CR2WFile[I].FILES),  cpos - startof(CR2WFile[I]), FileSize() - oldFileSize, true);
+            if (exists(CR2WFile[I].CR2WExport))
+                FixOffsets(startof(CR2WFile[I].CR2WExport), startof(CR2WFile[I].CR2WExport)+sizeof(CR2WFile[I].CR2WExport),  cpos - startof(CR2WFile[I]), FileSize() - oldFileSize, true);
+            kk=0;
+            while (exists(CR2WFile[I].CR2WBuffer[kk])) {
+                if (CR2WFile[I].CR2WBuffer[kk].offset > cpos - startof(CR2WFile[I])) 
+                    CR2WFile[I].CR2WBuffer[kk].offset += (FileSize() - oldFileSize);
+                kk++;
+            }
+        }
+        I++;
+    }
 }
 
+if (doCName)
+    InsertNewCName();
+else if (doCR2WImport)
+    InsertNewCR2WImport();
+else if (doCR2WExport)
+    InsertNewCR2WExport();
+else if (doCR2WBuffer)
+    InsertNewCR2WBuffer();
+else if (doProperty)
+    InsertNewProperty();
 
 if (Run_Template_After_Completion)
     RunTemplate("", true);
-
 Printf(output);
+if (!Run_Template_After_Completion && addedSize != 0)
+    Printf("Press F5 to refresh the template and fix template results\n");
 WriteByte(7,0); //allows script-undo

@@ -1,0 +1,201 @@
+//------------------------------------------------
+//--- 010 Editor v10.0.2 Script File
+//
+//      File: CP77_CR2W_changeValues.1sc
+//   Authors: alphaZomega
+//   Version: 0.2
+//   Purpose: Select the bytes you want to change values in, then run the script
+//  Category: CP77_CR2W
+//   History: September 29, 2021
+//------------------------------------------------
+
+//Options:
+local byte inputValue = FALSE; // Set this to FALSE to make your own automated scripts with this script below
+
+
+//Each "runScript" is like an execution of the normal script, but the values don't need to be inputted:
+void runScripts() 
+{   //runScript(nameToFind, typeToFind, searchValue, changeValue)
+    
+    
+    runScript("chunkMaterials", "", "", "blue"); //example
+    //runScript("", "", "blue", "60");
+}
+
+//global vars:
+uint64 a, f, g, d, i;
+uint CR2WIdx = 0;
+uint lowerBound = 0, upperBound = FileSize();
+local ubyte multiply, divide, add, not, random, isNumeric;
+string nameToFind, typeToFind, searchValue, changeValue, sPrnt;
+
+
+//functions:
+string MakeMultiValue(PROPERTY &r, string oldStr, string newStr) {
+    string result = newStr;
+    float values[4];
+    if (doesExist(newStr, " "))  {
+        SScanf( newStr, "%g %g %g %g", values[0], values[1], values[2], values[3] );
+        for (g=0; g<4; g++) {
+            if (random && values[g] > 0) 
+                values[g] = (0.01) * (float)Random(values[g]);
+            if (exists(r.Value[g]))
+                if (multiply) {
+                    values[g] = r.Value[g] * values[g];
+                } else if (divide && values[g] != 0) {
+                    values[g] = r.Value[g] / values[g];
+                } else if (add) {
+                    values[g] = r.Value[g] + values[g];
+                }
+        }
+        SPrintf(result, "%g %g %g %g", values[0], values[1], values[2], values[3]);
+    }
+    return result;
+}
+
+byte find(string str, string term) { return (RegExSearch(str, term, matchSize, 0)); }
+
+void getNewValue(string oldValue, string newValue) {
+    if (random)
+        SPrintf(changeValue, "%i", Random(Atoi(changeValue)));
+    if (multiply) {
+        SPrintf(newValue, "%g", Atof(oldValue) * Atof(changeValue));
+    } else if (divide) {
+        if (Atof(oldValue) != 0) 
+            SPrintf(newValue, "%g", Atof(oldValue) / Atof(changeValue));
+    } else if (add) {
+        SPrintf(newValue, "%g", Atof(oldValue) + Atof(changeValue));
+    } else {
+        newValue = changeValue;
+    }
+}
+
+string extractOldValue(string oldValue) { //extracts an old value from the string ReadPROPERTY() result
+    local short regIdx = find(oldValue, "= ");
+    if (regIdx > -1) 
+        oldValue = StrDel(oldValue, 0, regIdx + 2);
+    regIdx = 0;
+    if (sizeof(oldValue) > 1) {
+        while (oldValue[regIdx] == 0x20) regIdx++; 
+        oldValue = StrDel(oldValue, 0, regIdx);
+        if (isNumeric) {
+            SPrintf(oldValue, "%g", Atof(oldValue));
+        } else {
+            regIdx = find(oldValue, "[(]");
+	        if (regIdx != -1) {
+                oldValue = StrDel(oldValue, 0, regIdx+1);
+                oldValue = StrDel(oldValue, Strlen(oldValue)-1, 1);
+            } else {
+                regIdx = find(oldValue, "--");
+                if (regIdx != -1)
+                    oldValue = StrDel(oldValue, 0, regIdx+3);
+                oldValue = StrDel(oldValue, 0, find(oldValue, "\w"));
+            }
+        }
+    }
+    return oldValue;
+}
+
+void changeProp(PROPERTY& prop) {
+    local int p;
+    if (exists(prop.Type.type)) {
+        local string oldValue = extractOldValue(ReadPROPERTY(prop)); 
+        local string newValue; 
+        //Printf("%s\n", oldValue);
+        if ((typeToFind == "" || (exists(prop.Type.type) && prop.Type.type == typeToFind))
+        && (nameToFind  == "" || (exists(prop.Type.name) && prop.Type.name == nameToFind))
+        && (searchValue == "" || (oldValue == searchValue ))) {
+            if (exists(prop.Vector2)) {
+                local ushort ctr;
+                while (exists(prop.Vector2[ctr]) && FTell() < upperBound) {
+                    oldValue = ReadCD_VECTOR2(prop.Vector2[ctr]);
+                    getNewValue(oldValue, newValue);
+                    WriteCD_VECTOR2(prop.Vector2[ctr], newValue);
+                    ctr++;
+                }
+            } else if (oldValue[0] == 91) { // "["
+                newValue = MakeMultiValue(prop, oldValue, changeValue); // MakeMultiValue will do it
+            } else {
+                getNewValue(oldValue, newValue);
+            }
+           
+            Printf("Changing %s %s value at %u from %s to %s \n", typeToFind, nameToFind, startof(prop), oldValue, newValue);
+            WritePROPERTY(prop, newValue);
+        }
+    }
+    p=0;
+    while (exists(prop.More[p])) { changeProp(prop.More[p]); p++; }
+}
+
+void runScript(string nmToFind, string typToFind, string srchValue, string chngValue) {
+    nameToFind = nmToFind;
+    typeToFind = typToFind;
+    searchValue = srchValue;
+    changeValue = chngValue;
+    
+    (searchValue == "0" || Atof(searchValue) != 0) ? isNumeric = TRUE : isNumeric = FALSE;
+    
+    if (changeValue[0] == 0x21) { //"!" unused
+        not = TRUE;
+        changeValue = SubStr(changeValue, 1, sizeof(changeValue)-1);
+    }
+    if (changeValue[0] == 0x7E) { //"~"
+        random = TRUE;
+        changeValue = SubStr(changeValue, 1, sizeof(changeValue)-1);
+    }
+    
+    if (changeValue[0] == 0x2A)
+        multiply = TRUE;
+    else if (changeValue[0] == 0x2F)
+        divide = TRUE;
+    else if (changeValue[0] == 0x2B)
+        add = TRUE;
+    
+    if (multiply || add || divide || random)  {
+        changeValue = SubStr(changeValue, 1, sizeof(changeValue)-1);
+    }
+    
+    CR2WIdx = 0;
+    while(exists(CR2WFile[CR2WIdx]) && (startof(CR2WFile[CR2WIdx]) >= lowerBound
+    && startof(CR2WFile[CR2WIdx]) + sizeof(CR2WFile[CR2WIdx]) <= upperBound )) {
+        a = 0;
+        while (exists(CR2WFile[CR2WIdx].DATA.Class[a]) && (startof(CR2WFile[CR2WIdx].DATA.Class[a]) >= lowerBound
+        && startof(CR2WFile[CR2WIdx].DATA.Class[a]) + sizeof(CR2WFile[CR2WIdx].DATA.Class[a]) <= upperBound )) {
+            f = 0;
+            while (exists(CR2WFile[CR2WIdx].DATA.Class[a].Property[f]) && (startof(CR2WFile[CR2WIdx].DATA.Class[a].Property[f]) >= lowerBound
+            && startof(CR2WFile[CR2WIdx].DATA.Class[a].Property[f]) + sizeof(CR2WFile[CR2WIdx].DATA.Class[a].Property[f]) <= upperBound )) {
+                changeProp(CR2WFile[CR2WIdx].DATA.Class[a].Property[f]);
+                f++;
+            }
+            a++;
+        }
+        CR2WIdx++;
+    }
+    multiply = 0; divide = 0; add = 0; random = 0; not = 0;
+}
+
+//==============================
+//start of file
+if (GetSelSize() > 3 ) {
+    lowerBound = GetSelStart();
+    upperBound = GetSelStart() + GetSelSize();
+} 
+
+if (inputValue) {
+        
+    nameToFind = InputString("Change Values", "Input Name to find", "");
+    typeToFind = InputString("Change Values", "Input Type to find", "");
+    
+    if (GetSelSize() && GetSelSize() > 64)
+        Printf("Will change %s %s variables within range: [%u to %u]\n\n", typeToFind, nameToFind, lowerBound, upperBound);
+    
+    string msg; SPrintf(msg, "Or leave blank to change all %s %s values", typeToFind, nameToFind);
+    searchValue = InputString("Input old value to find", msg, "");    
+    changeValue = InputString("Input New Value", "Example:\n5 = Change to 5\n*1 = Multiply by 1\n\\2 = Divide by 2\n+1.4 = Add 1.4\n+-3 = Subtract 3", "*1");
+    Printf("ChangeValue: %s\n", changeValue);
+    if (changeValue == "") return;
+    runScript(nameToFind, typeToFind, searchValue, changeValue);
+} else { 
+    runScripts();
+}
+

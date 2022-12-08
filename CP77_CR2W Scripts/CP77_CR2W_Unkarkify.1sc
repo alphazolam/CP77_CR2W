@@ -3,7 +3,7 @@
 //
 //      File: CP77_CR2W_Unkarkify.1sc
 //   Authors: loomy, alphaZomega
-//   Version: 0.21
+//   Version: 0.22
 //   Purpose: Replaces compressed CR2W buffer data with that same data decompressed 
 //  Category: CP77_CR2W
 //   History: September 13 2021
@@ -31,35 +31,40 @@ int unkark(uint64 ds,uint64 zs,uint64 ptr) {
     return result;
 }
 
-int rawOffset, k, result = 0;
+int rawOffset, k, f, result = 0;
 int isKark = 0;
 uint64 zSize, dSize,tt = 0;
 
 
-if (exists(CR2WFile.CR2WBuffer)) {
-    rawOffset = 0;
-    FSeek(CR2WFile.CR2WBuffer[0].offset + start);
-    
-    for (k=0; k < CR2WFile.CR2WTable[5].itemCount; k++ ) {
-        if(k==0){
-            rawOffset = CR2WFile.CR2WBuffer[k].offset + start;
-        }else{
-            rawOffset = rawOffset + CR2WFile.CR2WBuffer[k-1].memSize;
-        }
-        if (rawOffset < FileSize()-4 ) {
-            FSeek(rawOffset);
-            isKark = ReadInt(FTell()) == 1263681867;
-            if(isKark)
-            {
-                zSize = ReadUInt(FTell() +4);
-                dSize = CR2WFile.CR2WBuffer[k].diskSize - 8;
-                CR2WFile.CR2WBuffer[k].offset = rawOffset;
-                CR2WFile.CR2WBuffer[k].diskSize = CR2WFile.CR2WBuffer[k].memSize;
-                unkark(dSize,zSize,FTell());
-                tt = 0;
+while (exists(CR2WFile[f])) {
+    start = startof(CR2WFile[f]);
+    if (exists(CR2WFile[f].CR2WBuffer)) {
+        rawOffset = 0;
+        FSeek(CR2WFile[f].CR2WBuffer[0].offset + start);
+        
+        rawOffset = CR2WFile[f].CR2WBuffer[k].offset ;
+        
+        for (k=0; k < CR2WFile[f].CR2WTable[5].itemCount; k++ ) {
+            if(k) {
+                rawOffset += CR2WFile[f].CR2WBuffer[k-1].memSize;
+            }
+            Printf("%i\n", rawOffset);
+            if (rawOffset < FileSize()-4 ) {
+                FSeek(rawOffset);
+                isKark = ReadInt(FTell()) == 1263681867;
+                if(isKark)
+                {
+                    zSize = ReadUInt(FTell() +4);
+                    dSize = CR2WFile[f].CR2WBuffer[k].diskSize - 8;
+                    CR2WFile[f].CR2WBuffer[k].diskSize = CR2WFile[f].CR2WBuffer[k].memSize;
+                    unkark(dSize,zSize,FTell());
+                    tt = 0;
+                }
+                CR2WFile[f].CR2WBuffer[k].offset = rawOffset;
             }
         }
     }
+    f++;
 }
 //run template 2nd time to parse correct unpacked buffers
 RunTemplate("", false);
