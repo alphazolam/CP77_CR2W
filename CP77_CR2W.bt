@@ -1139,7 +1139,7 @@ typedef struct {
             && input.str != "" && !doesExist(name,"mip") && !doesExist(name,"itch") && !doesExist(name,"slice")
             && (Lower(type) != "bool" && type != "register") && (name != "version" && name != "flags") && name != "index") {
                 local string str = CR2WFile[input.Type.dataType.lvl].NAMES.Name[input.Value].name;
-                SPrintf( value, "%Ld (%s)", input.Value, str); 
+                SPrintf( value, "%s (%Ld)", str, input.Value); 
             } else {
                 if (sizeof(input.Value) == 8) { 
                     SPrintf( value,  "%Lu", input.Value);
@@ -1147,7 +1147,7 @@ typedef struct {
                 else SPrintf( value,  "%Ld", input.Value);
             }
         } else if (exists(input.Index) && exists(CR2WFile[input.Index.lvl].NAMES.Name[input.Index.Index].name)) {
-            SPrintf( value,  "%u (%s)", input.Index.Index, CR2WFile[input.Index.lvl].NAMES.Name[input.Index.Index].name); 
+            SPrintf( value,  "%s (%u)", CR2WFile[input.Index.lvl].NAMES.Name[input.Index.Index].name, input.Index.Index); 
         } else if (exists(input.More) && exists(input.More[0].Value) && input.More[0].theName == "Red") { //&& input.More.theType == "Float"
             value = SPrintf(value, "[%g", input.More[0].Value);
             local ubyte ctr = 1;
